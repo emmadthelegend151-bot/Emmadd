@@ -1,158 +1,87 @@
+
 import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
 import matplotlib.pyplot as plt
-import seaborn as sns
-import plotly.express as px
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 
-# Page Configuration
-st.set_page_config(
-    page_title="Heart Disease Predictor",
-    page_icon="❤️",
-    layout="wide"
-)
+# Load the saved model and scaler
+model = joblib.load('heart_model.pkl')
+scaler = joblib.load('scaler.pkl')
 
-# Title
-st.title("❤️ Heart Disease Prediction System")
-st.markdown("### A Machine Learning Web App built with Streamlit")
+st.set_page_config(page_title="Heart Health AI", layout="wide")
 
-# Sidebar
-st.sidebar.header("Navigation")
-page = st.sidebar.selectbox("Go to", ["🏠 Home", "📊 EDA", "🔮 Predict", "📈 Model Info"])
+st.title("❤️ Heart Disease Diagnostic Dashboard")
+st.markdown("Enter patient clinical data to evaluate risk and receive health recommendations.")
 
-# Load or Create Dataset
-@st.cache_data
-def load_data(uploaded_file=None):
-    if uploaded_file is not None:
-        df = pd.read_csv(uploaded_file)
-    else:
-        # Sample data (you can replace with your full dataset)
-        data = {
-            'age': [63, 37, 41, 56, 57],
-            'sex': [1, 1, 0, 1, 0],
-            'cp': [3, 2, 1, 1, 0],
-            'trestbps': [145, 130, 130, 120, 120],
-            'chol': [233, 250, 204, 236, 354],
-            'fbs': [1, 0, 0, 0, 0],
-            'restecg': [0, 1, 0, 1, 1],
-            'thalach': [150, 187, 172, 178, 163],
-            'exang': [0, 0, 0, 0, 1],
-            'oldpeak': [2.3, 3.5, 1.4, 0.8, 0.6],
-            'slope': [0, 2, 2, 2, 2],
-            'ca': [0, 0, 0, 0, 0],
-            'thal': [1, 2, 2, 2, 2],
-            'target': [1, 1, 1, 1, 1]
-        }
-        df = pd.DataFrame(data)
-    return df
+# Sidebar for inputs
+with st.sidebar:
+    st.header("Patient Clinical Data")
+    age = st.number_input("Age", 1, 120, 60)
+    sex = st.selectbox("Sex", [0, 1], format_func=lambda x: "Male (1)" if x==1 else "Female (0)")
+    cp = st.selectbox("Chest Pain Type (0-3)", [0, 1, 2, 3], index=2)
+    trestbps = st.number_input("Resting Blood Pressure", 50, 250, 130)
+    chol = st.number_input("Serum Cholesterol", 100, 600, 230)
+    fbs = st.selectbox("Fasting Blood Sugar > 120 mg/dl", [0, 1])
+    restecg = st.selectbox("Resting ECG (0-2)", [0, 1, 2], index=1)
+    thalach = st.number_input("Max Heart Rate", 60, 220, 168)
+    exang = st.selectbox("Exercise Induced Angina", [0, 1])
+    oldpeak = st.number_input("ST Depression (Oldpeak)", 0.0, 6.0, 1.0)
+    slope = st.selectbox("ST Slope (0-2)", [0, 1, 2], index=2)
+    ca = st.selectbox("Number of Major Vessels", [0, 1, 2, 3, 4], index=4)
+    thal = st.selectbox("Thal (0-3)", [0, 1, 2, 3], index=3)
 
-# Main Pages
-if page == "🏠 Home":
-    st.image("https://img.freepik.com/free-vector/heart-disease-concept-illustration_23-2148650787.jpg", width=300)
-    st.write("""
-    This application predicts whether a person has **heart disease** (Target = 1) or not (Target = 0) 
-    using Machine Learning.
-    """)
-    
-    uploaded_file = st.file_uploader("Upload your heart.csv dataset", type=["csv"])
-    df = load_data(uploaded_file)
-    
-    col1, col2, col3 = st.columns(3)
+if st.button("Run Diagnostic Analysis"):
+    # Prepare and scale data
+    input_data = [[age, sex, cp, trestbps, chol, fbs, restecg, thalach, exang, oldpeak, slope, ca, thal]]
+    scaled_data = scaler.transform(input_data)
+    prediction = model.predict(scaled_data)[0]
+
+    col1, col2 = st.columns([1, 1])
+
     with col1:
-        st.metric("Total Records", len(df))
-    with col2:
-        st.metric("Heart Disease Cases", df['target'].sum())
-    with col3:
-        st.metric("Accuracy Potential", "85-92%")
-
-    st.dataframe(df.head(), use_container_width=True)
-
-elif page == "📊 EDA":
-    st.header("Exploratory Data Analysis")
-    df = load_data(st.file_uploader("Upload your dataset for EDA", type=["csv"]))
-    
-    tab1, tab2, tab3 = st.tabs(["Distribution", "Correlation", "Features vs Target"])
-    
-    with tab1:
-        fig = px.histogram(df, x='age', color='target', barmode='group', title="Age Distribution by Target")
-        st.plotly_chart(fig, use_container_width=True)
-    
-    with tab2:
-        fig, ax = plt.subplots(figsize=(10, 8))
-        sns.heatmap(df.corr(), annot=True, cmap='coolwarm', ax=ax)
-        st.pyplot(fig)
-    
-    with tab3:
-        feature = st.selectbox("Select Feature", df.columns[:-1])
-        fig = px.box(df, x='target', y=feature, color='target', title=f"{feature} vs Target")
-        st.plotly_chart(fig, use_container_width=True)
-
-elif page == "🔮 Predict":
-    st.header("🔮 Predict Heart Disease Risk")
-    
-    st.subheader("Enter Patient Information")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        age = st.slider("Age", 20, 80, 55)
-        sex = st.selectbox("Sex", [0, 1], format_func=lambda x: "Female" if x == 0 else "Male")
-        cp = st.selectbox("Chest Pain Type", [0,1,2,3], 
-                         format_func=lambda x: ["Typical Angina", "Atypical Angina", "Non-anginal Pain", "Asymptomatic"][x])
-        trestbps = st.slider("Resting Blood Pressure (mm Hg)", 90, 200, 130)
-        chol = st.slider("Serum Cholesterol (mg/dl)", 100, 400, 250)
-        fbs = st.selectbox("Fasting Blood Sugar > 120 mg/dl", [0, 1])
-    
-    with col2:
-        restecg = st.selectbox("Resting ECG", [0,1,2])
-        thalach = st.slider("Maximum Heart Rate Achieved", 60, 200, 150)
-        exang = st.selectbox("Exercise Induced Angina", [0, 1])
-        oldpeak = st.slider("ST Depression Induced by Exercise", 0.0, 6.0, 1.0, 0.1)
-        slope = st.selectbox("Slope of Peak Exercise ST Segment", [0,1,2])
-        ca = st.slider("Number of Major Vessels (0-3)", 0, 3, 0)
-        thal = st.selectbox("Thalassemia", [0,1,2,3])
-
-    # Prediction Button
-    if st.button("🚀 Predict Heart Disease", type="primary", use_container_width=True):
-        # Create input dataframe
-        input_data = pd.DataFrame({
-            'age': [age], 'sex': [sex], 'cp': [cp], 'trestbps': [trestbps], 'chol': [chol],
-            'fbs': [fbs], 'restecg': [restecg], 'thalach': [thalach], 'exang': [exang],
-            'oldpeak': [oldpeak], 'slope': [slope], 'ca': [ca], 'thal': [thal]
-        })
-        
-        # Load or train model
-        try:
-            model = joblib.load('heart_disease_model.pkl')
-        except:
-            st.warning("Model not found. Training a new one...")
-            df = load_data()
-            X = df.drop('target', axis=1)
-            y = df['target']
-            model = RandomForestClassifier(n_estimators=200, random_state=42)
-            model.fit(X, y)
-        
-        # Make prediction
-        prediction = model.predict(input_data)[0]
-        probability = model.predict_proba(input_data)[0][1]
-        
+        st.subheader("Result & Visualization")
         if prediction == 1:
-            st.error(f"⚠️ **High Risk of Heart Disease** ({probability:.1%} probability)")
+            st.error("### STATUS: High Risk Detected")
         else:
-            st.success(f"✅ **Low Risk** - No Heart Disease Detected ({(1-probability):.1%} probability)")
-        
-        # Progress bar
-        st.progress(probability)
-        st.write(f"Risk Probability: **{probability:.1%}**")
+            st.success("### STATUS: Low Risk Detected")
 
-elif page == "📈 Model Info":
-    st.header("Model Performance")
-    st.write("Random Forest Classifier is used (Best performing on this dataset)")
-    st.info("Typical Accuracy: **88% - 92%** on test data")
+        # Radar Chart
+        labels = ['BP', 'Cholesterol', 'Max HR', 'ST Dep.', 'Vessels']
+        stats = [trestbps/200, chol/400, thalach/200, oldpeak/6, ca/4]
+        healthy = [120/200, 200/400, 150/200, 0.1/6, 0.1/4]
 
-st.sidebar.markdown("---")
-st.sidebar.info("Built with ❤️ using Streamlit")
+        angles = np.linspace(0, 2*np.pi, len(labels), endpoint=False).tolist()
+        stats = np.concatenate((stats, [stats[0]]))
+        healthy = np.concatenate((healthy, [healthy[0]]))
+        angles += angles[:1]
+
+        fig, ax = plt.subplots(figsize=(6, 6), subplot_kw=dict(polar=True))
+        ax.fill(angles, stats, color='red', alpha=0.3, label='Patient')
+        ax.fill(angles, healthy, color='green', alpha=0.1, label='Healthy Baseline')
+        ax.set_xticks(angles[:-1])
+        ax.set_xticklabels(labels)
+        st.pyplot(fig)
+
+    with col2:
+        st.subheader("Personalized Health Advice")
+        advice_found = False
+        if trestbps > 130:
+            st.warning("**Blood Pressure:** Your BP is high. Consider reducing salt intake and managing stress.")
+            advice_found = True
+        if chol > 200:
+            st.warning("**Cholesterol:** Levels are elevated. Focus on fiber-rich foods and heart-healthy fats.")
+            advice_found = True
+        if fbs == 1:
+            st.warning("**Blood Sugar:** Fasting blood sugar is high. Monitor carbohydrate intake.")
+            advice_found = True
+        if thalach < 120:
+            st.info("**Heart Rate:** Your max heart rate is low. Discuss cardiovascular fitness with your doctor.")
+            advice_found = True
+
+        if not advice_found and prediction == 0:
+            st.success("All core metrics are within healthy ranges. Keep up the good work!")
+
+        if prediction == 1:
+            st.markdown("--- ")
+            st.markdown("**Note:** Please consult a medical professional for a formal diagnosis.")
