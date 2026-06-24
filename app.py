@@ -6,8 +6,7 @@ import numpy as np
 import joblib
 import matplotlib.pyplot as plt
 
-# 1. Load the saved model and scaler
-# Note: Ensure these files are uploaded to the same folder on GitHub
+
 model = joblib.load('heart_model.pkl')
 scaler = joblib.load('scaler.pkl')
 
@@ -16,7 +15,7 @@ st.set_page_config(page_title="Heart Health AI", layout="wide")
 st.title("❤️ Heart Disease Diagnostic Dashboard")
 st.markdown("Enter patient clinical data to evaluate risk and receive health recommendations.")
 
-# Sidebar for inputs
+
 with st.sidebar:
     st.header("Patient Clinical Data")
     age = st.number_input("Age", 1, 120, 60)
@@ -34,7 +33,7 @@ with st.sidebar:
     thal = st.selectbox("Thal (0-3)", [0, 1, 2, 3], index=3)
 
 if st.button("Run Diagnostic Analysis"):
-    # Prepare and scale data
+   
     input_data = [[age, sex, cp, trestbps, chol, fbs, restecg, thalach, exang, oldpeak, slope, ca, thal]]
     scaled_data = scaler.transform(input_data)
     prediction = model.predict(scaled_data)[0]
@@ -48,7 +47,7 @@ if st.button("Run Diagnostic Analysis"):
         else:
             st.success("### STATUS: Low Risk Detected")
 
-        # Radar Chart Logic
+       
         labels = ['BP', 'Cholesterol', 'Max HR', 'ST Dep.', 'Vessels']
         stats = [trestbps/200, chol/400, thalach/200, oldpeak/6, ca/4]
         healthy = [120/200, 200/400, 150/200, 0.1/6, 0.1/4]
