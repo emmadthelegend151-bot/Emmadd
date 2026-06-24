@@ -1,52 +1,72 @@
+%%writefile app.py
 import streamlit as st
-import pickle
+import pandas as pd
 import numpy as np
+import joblib
+import matplotlib.pyplot as plt
 
-# 1. Page Configuration
-st.set_page_config(
-    page_title="Machine Learning Predictor",
-    page_icon="🔮",
-    layout="centered"
-)
+# 1. Load the saved model and scaler
+# Note: Ensure these files are uploaded to the same folder on GitHub
+model = joblib.load('heart_model.pkl')
+scaler = joblib.load('scaler.pkl')
 
-# 2. Load the Pickled Model Safely
-@st.cache_resource
-def load_model():
-    try:
-        with open("model.pkl", "rb") as file:
-            model = pickle.load(file)
-        return model
-    except FileNotFoundError:
-        st.error("Error: 'model.pkl' not found. Please ensure it is in the same directory.")
-        return None
+st.set_page_config(page_title="Heart Health AI", layout="wide")
 
-model = load_model()
+st.title("❤️ Heart Disease Diagnostic Dashboard")
+st.markdown("Enter patient clinical data to evaluate risk and receive health recommendations.")
 
-# 3. User Interface
-st.title("🔮 Machine Learning Model Predictor")
-st.write("Enter the required inputs below to generate a prediction.")
+# Sidebar for inputs
+with st.sidebar:
+    st.header("Patient Clinical Data")
+    age = st.number_input("Age", 1, 120, 60)
+    sex = st.selectbox("Sex", [0, 1], format_func=lambda x: "Male (1)" if x==1 else "Female (0)")
+    cp = st.selectbox("Chest Pain Type (0-3)", [0, 1, 2, 3], index=2)
+    trestbps = st.number_input("Resting Blood Pressure", 50, 250, 130)
+    chol = st.number_input("Serum Cholesterol", 100, 600, 230)
+    fbs = st.selectbox("Fasting Blood Sugar > 120 mg/dl", [0, 1])
+    restecg = st.selectbox("Resting ECG (0-2)", [0, 1, 2], index=1)
+    thalach = st.number_input("Max Heart Rate", 60, 220, 168)
+    exang = st.selectbox("Exercise Induced Angina", [0, 1])
+    oldpeak = st.number_input("ST Depression (Oldpeak)", 0.0, 6.0, 1.0)
+    slope = st.selectbox("ST Slope (0-2)", [0, 1, 2], index=2)
+    ca = st.selectbox("Number of Major Vessels", [0, 1, 2, 3, 4], index=4)
+    thal = st.selectbox("Thal (0-3)", [0, 1, 2, 3], index=3)
 
-# --- CUSTOMIZE YOUR INPUTS HERE ---
-# Replace these with the actual features your model expects
-feature_1 = st.number_input("Feature 1 Name (e.g., Age)", min_value=0, max_value=100, value=25)
-feature_2 = st.number_input("Feature 2 Name (e.g., Income)", min_value=0, value=50000)
-feature_3 = st.selectbox("Feature 3 Name (e.g., Gender)", options=["Option A", "Option B"])
+if st.button("Run Diagnostic Analysis"):
+    # Prepare and scale data
+    input_data = [[age, sex, cp, trestbps, chol, fbs, restecg, thalach, exang, oldpeak, slope, ca, thal]]
+    scaled_data = scaler.transform(input_data)
+    prediction = model.predict(scaled_data)[0]
 
-# Convert categorical inputs to numerical if your model requires it
-f3_mapped = 1 if feature_3 == "Option A" else 0
-# ----------------------------------
+    col1, col2 = st.columns([1, 1])
 
-# 4. Prediction Logic
-if st.button("Generate Prediction", type="primary"):
-    if model is not None:
-        # Prepare the input array matching the shape your model trained on
-        input_data = np.array([[feature_1, feature_2, f3_mapped]])
-        
-        # Run prediction
-        prediction = model.predict(input_data)
-        
-        # Display Results
-        st.success("🎉 Prediction Generated Successfully!")
-        st.metric(label="Predicted Value", value=f"{prediction[0]}")
-    else:
-        st.error("Model is not loaded. Cannot predict.")
+    with col1:
+        st.subheader("Result & Visualization")
+        if prediction == 1:
+            st.error("### STATUS: High Risk Detected")
+        else:
+            st.success("### STATUS: Low Risk Detected")
+
+        # Radar Chart Logic
+        labels = ['BP', 'Cholesterol', 'Max HR', 'ST Dep.', 'Vessels']
+        stats = [trestbps/200, chol/400, thalach/200, oldpeak/6, ca/4]
+        healthy = [120/200, 200/400, 150/200, 0.1/6, 0.1/4]
+        angles = np.linspace(0, 2*np.pi, len(labels), endpoint=False).tolist()
+        stats = np.concatenate((stats, [stats[0]]))
+        healthy = np.concatenate((healthy, [healthy[0]]))
+        angles += angles[:1]
+
+        fig, ax = plt.subplots(figsize=(6, 6), subplot_kw=dict(polar=True))
+        ax.fill(angles, stats, color='red', alpha=0.3, label='Patient')
+        ax.fill(angles, healthy, color='green', alpha=0.1, label='Healthy Baseline')
+        ax.set_xticks(angles[:-1])
+        ax.set_xticklabels(labels)
+        st.pyplot(fig)
+
+    with col2:
+        st.subheader("Personalized Health Advice")
+        advice_found = False
+        if trestbps > 130: st.warning("**BP:** High. Reduce salt intake.")
+        if chol > 200: st.warning("**Cholesterol:** Elevated. Focus on heart-healthy fats.")
+        if not advice_found and prediction == 0:
+            st.success("All metrics are within healthy ranges.")
